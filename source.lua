@@ -129,35 +129,15 @@ if not prompt and not useStudio then
 end
 
 
--- The function below provides a safe alternative for calling error-prone functions
--- Especially useful for filesystem function (writefile, makefolder, etc.)
-local function callSafely(func, ...)
-	if func then
-		local success, result = pcall(func, ...)
-		if not success then
-			warn("Rayfield | Function failed with error: ", result)
-			return false
-		else
-			return result
-		end
-	end
-end
-
--- Ensures a folder exists by creating it if needed
-local function ensureFolder(folderPath)
-	if isfolder and not callSafely(isfolder, folderPath) then
-		callSafely(makefolder, folderPath)
-	end
-end
 
 local function loadSettings()
 	local file = nil
 
 	local success, result =	pcall(function()
 		task.spawn(function()
-			if callSafely(isfolder, RayfieldFolder) then
-				if callSafely(isfile, RayfieldFolder..'/settings'..ConfigurationExtension) then
-					file = callSafely(readfile, RayfieldFolder..'/settings'..ConfigurationExtension)
+			if isfolder and isfolder(RayfieldFolder) then
+				if isfile and isfile(RayfieldFolder..'/settings'..ConfigurationExtension) then
+					file = readfile(RayfieldFolder..'/settings'..ConfigurationExtension)
 				end
 			end
 
@@ -772,7 +752,6 @@ local Hidden = false
 local Debounce = false
 local searchOpen = false
 local Notifications = Rayfield.Notifications
-local keybindConnections = {} -- For storing keybind connections to disconnect when Rayfield is destroyed
 
 local SelectedTheme = RayfieldLibrary.Theme.Default
 
@@ -1028,8 +1007,9 @@ local function SaveConfiguration()
 		warn(HttpService:JSONEncode(Data))
 	end
 
-
-	callSafely(writefile, ConfigurationFolder .. "/" .. CFileName .. ConfigurationExtension, tostring(HttpService:JSONEncode(Data)))
+	if writefile then
+		writefile(ConfigurationFolder .. "/" .. CFileName .. ConfigurationExtension, tostring(HttpService:JSONEncode(Data)))
+	end
 end
 
 function RayfieldLibrary:Notify(data) -- action e.g open messages
@@ -1503,7 +1483,9 @@ local function saveSettings() -- Save settings to config file
 				script.Parent['get.val'].Value = encoded
 			end
 		end
-		callSafely(writefile, RayfieldFolder..'/settings'..ConfigurationExtension, encoded)
+		if writefile then
+			writefile(RayfieldFolder..'/settings'..ConfigurationExtension, encoded)
+		end
 	end
 end
 
@@ -1582,6 +1564,7 @@ end
 
 
 function RayfieldLibrary:CreateWindow(Settings)
+	print('creating window')
 	if Rayfield:FindFirstChild('Loading') then
 		if getgenv and not getgenv().rayfieldCached then
 			Rayfield.Enabled = true
@@ -1617,7 +1600,9 @@ function RayfieldLibrary:CreateWindow(Settings)
 		end
 	end
 
-	ensureFolder(RayfieldFolder)
+	if isfolder and not isfolder(RayfieldFolder) then
+		makefolder(RayfieldFolder)
+	end
 
 	-- Attempt to report an event to analytics
 	if not requestsDisabled then
@@ -1717,7 +1702,9 @@ function RayfieldLibrary:CreateWindow(Settings)
 		CEnabled = Settings.ConfigurationSaving.Enabled
 
 		if Settings.ConfigurationSaving.Enabled then
-			ensureFolder(ConfigurationFolder)
+			if not isfolder(ConfigurationFolder) then
+				makefolder(ConfigurationFolder)
+			end	
 		end
 	end)
 
@@ -1735,9 +1722,11 @@ function RayfieldLibrary:CreateWindow(Settings)
 	end
 
 	if Settings.Discord and Settings.Discord.Enabled and not useStudio then
-		ensureFolder(RayfieldFolder.."/Discord Invites")
+		if isfolder and not isfolder(RayfieldFolder.."/Discord Invites") then
+			makefolder(RayfieldFolder.."/Discord Invites")
+		end
 
-		if callSafely(isfile, RayfieldFolder.."/Discord Invites".."/"..Settings.Discord.Invite..ConfigurationExtension) then
+		if isfile and not isfile(RayfieldFolder.."/Discord Invites".."/"..Settings.Discord.Invite..ConfigurationExtension) then
 			if requestFunc then
 				pcall(function()
 					requestFunc({
@@ -1757,7 +1746,7 @@ function RayfieldLibrary:CreateWindow(Settings)
 			end
 
 			if Settings.Discord.RememberJoins then -- We do logic this way so if the developer changes this setting, the user still won't be prompted, only new users
-				callSafely(writefile, RayfieldFolder.."/Discord Invites".."/"..Settings.Discord.Invite..ConfigurationExtension,"Rayfield RememberJoins is true for this invite, this invite will not ask you to join again")
+				writefile(RayfieldFolder.."/Discord Invites".."/"..Settings.Discord.Invite..ConfigurationExtension,"Rayfield RememberJoins is true for this invite, this invite will not ask you to join again")
 			end
 		end
 	end
@@ -1768,7 +1757,9 @@ function RayfieldLibrary:CreateWindow(Settings)
 			return
 		end
 
-		ensureFolder(RayfieldFolder.."/Key System")
+		if isfolder and not isfolder(RayfieldFolder.."/Key System") then
+			makefolder(RayfieldFolder.."/Key System")
+		end
 
 		if typeof(Settings.KeySettings.Key) == "string" then Settings.KeySettings.Key = {Settings.KeySettings.Key} end
 
@@ -1789,10 +1780,9 @@ function RayfieldLibrary:CreateWindow(Settings)
 			Settings.KeySettings.FileName = "No file name specified"
 		end
 
-		if callSafely(isfile, RayfieldFolder.."/Key System".."/"..Settings.KeySettings.FileName..ConfigurationExtension) then
+		if isfile and isfile(RayfieldFolder.."/Key System".."/"..Settings.KeySettings.FileName..ConfigurationExtension) then
 			for _, MKey in ipairs(Settings.KeySettings.Key) do
-				local savedKeys = callSafely(readfile, RayfieldFolder.."/Key System".."/"..Settings.KeySettings.FileName..ConfigurationExtension)
-				if keyFileContents and string.find(savedKeys, MKey) then
+				if string.find(readfile(RayfieldFolder.."/Key System".."/"..Settings.KeySettings.FileName..ConfigurationExtension), MKey) then
 					Passthrough = true
 				end
 			end
@@ -1902,7 +1892,9 @@ function RayfieldLibrary:CreateWindow(Settings)
 					Passthrough = true
 					KeyMain.Visible = false
 					if Settings.KeySettings.SaveKey then
-						callSafely(writefile, RayfieldFolder.."/Key System".."/"..Settings.KeySettings.FileName..ConfigurationExtension, FoundKey)
+						if writefile then
+							writefile(RayfieldFolder.."/Key System".."/"..Settings.KeySettings.FileName..ConfigurationExtension, FoundKey)
+						end
 						RayfieldLibrary:Notify({Title = "Key System", Content = "The key for this script has been saved successfully.", Image = 3605522284})
 					end
 				else
@@ -3017,7 +3009,7 @@ function RayfieldLibrary:CreateWindow(Settings)
 			local Keybind = Elements.Template.Keybind:Clone()
 			Keybind.Name = KeybindSettings.Name
 			Keybind.Title.Text = KeybindSettings.Name
-			Keybind.Visible = true
+			Keybind.Visible = KeybindSettings.Visibility
 			Keybind.Parent = TabPage
 
 			Keybind.BackgroundTransparency = 1
@@ -3056,7 +3048,7 @@ function RayfieldLibrary:CreateWindow(Settings)
 				TweenService:Create(Keybind, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), {BackgroundColor3 = SelectedTheme.ElementBackground}):Play()
 			end)
 
-			local connection = UserInputService.InputBegan:Connect(function(input, processed)
+			UserInputService.InputBegan:Connect(function(input, processed)
 				if CheckingForKey then
 					if input.KeyCode ~= Enum.KeyCode.Unknown then
 						local SplitMessage = string.split(tostring(input.KeyCode), ".")
@@ -3110,11 +3102,14 @@ function RayfieldLibrary:CreateWindow(Settings)
 					end
 				end
 			end)
-			table.insert(keybindConnections, connection)
 
 			Keybind.KeybindFrame.KeybindBox:GetPropertyChangedSignal("Text"):Connect(function()
 				TweenService:Create(Keybind.KeybindFrame, TweenInfo.new(0.55, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {Size = UDim2.new(0, Keybind.KeybindFrame.KeybindBox.TextBounds.X + 24, 0, 30)}):Play()
 			end)
+
+			function KeybindSettings:SetVisibility(bool)
+                Keybind.Visible = bool
+            end
 
 			function KeybindSettings:Set(NewKeybind)
 				Keybind.KeybindFrame.KeybindBox.Text = tostring(NewKeybind)
@@ -3320,7 +3315,7 @@ function RayfieldLibrary:CreateWindow(Settings)
 			local Slider = Elements.Template.Slider:Clone()
 			Slider.Name = SliderSettings.Name
 			Slider.Title.Text = SliderSettings.Name
-			Slider.Visible = true
+			Slider.Visible = SliderSettings.Visibility
 			Slider.Parent = TabPage
 
 			Slider.BackgroundTransparency = 1
@@ -3437,6 +3432,10 @@ function RayfieldLibrary:CreateWindow(Settings)
 					end
 				end)
 			end)
+
+            function SliderSettings:SetVisibility(bool)
+                Slider.Visible = bool
+            end
 
 			function SliderSettings:Set(NewVal)
 				local NewVal = math.clamp(NewVal, SliderSettings.Range[1], SliderSettings.Range[2])
@@ -3593,9 +3592,6 @@ local hideHotkeyConnection -- Has to be initialized here since the connection is
 function RayfieldLibrary:Destroy()
 	rayfieldDestroyed = true
 	hideHotkeyConnection:Disconnect()
-	for _, connection in keybindConnections do
-		connection:Disconnect()
-	end
 	Rayfield:Destroy()
 end
 
@@ -3748,8 +3744,8 @@ function RayfieldLibrary:LoadConfiguration()
 			end
 
 			if isfile then 
-				if callSafely(isfile, ConfigurationFolder .. "/" .. CFileName .. ConfigurationExtension) then
-					loaded = LoadConfiguration(callSafely(readfile, ConfigurationFolder .. "/" .. CFileName .. ConfigurationExtension))
+				if isfile(ConfigurationFolder .. "/" .. CFileName .. ConfigurationExtension) then
+					loaded = LoadConfiguration(readfile(ConfigurationFolder .. "/" .. CFileName .. ConfigurationExtension))
 				end
 			else
 				notified = true
@@ -4008,4 +4004,3 @@ task.delay(4, function()
 end)
 
 return RayfieldLibrary
-

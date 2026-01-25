@@ -236,7 +236,7 @@ if not requestsDisabled then
 			if debugX then warn('Finished Report') end
 		end
 	end
-	if cachedSettings and (#cachedSettings == 0 or (cachedSettings.System and cachedSettings.System.usageAnalytics and cachedSettings.System.usageAnalytics.Value)) then
+	if cachedSettings and (next(cachedSettings) == nil or (cachedSettings.System and cachedSettings.System.usageAnalytics and cachedSettings.System.usageAnalytics.Value)) then
 		sendReport("execution", "Rayfield")
 	elseif not cachedSettings then
 		sendReport("execution", "Rayfield")
@@ -1557,6 +1557,7 @@ local function createSettings(window)
 	end
 
 	settingsCreated = true
+	settingsInitialized = false
 	loadSettings()
 	saveSettings()
 end
